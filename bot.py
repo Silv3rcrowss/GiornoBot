@@ -1,18 +1,54 @@
 import discord
 import random
 from discord.ext import commands
+import youtube_dl
 from datetime import datetime
+import os
 
-
-TOKEN = "OTIyOTY3ODczODg5MTIwMjY4.YcJK0Q.3De7nzpXDgbONAIDZ3-X8Sj1MEQ"
+TOKEN = "OTIyOTY3ODczODg5MTIwMjY4.YcJK0Q.wdZsnVC7JRW0U4apBnbG41uZIvo"
 client = discord.Client()
 bot = commands.Bot(command_prefix="!")
+ydl_opts = {
+    "format": "bestaudio/best",
+    "postprocessors": [
+        {
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }
+    ],
+}
+
+
+def endSong(guild, path):
+    os.remove(path)
 
 
 @bot.command()
-async def play(ctx):
-    pass
+async def play(ctx, url):
+    if not ctx.message.author.voice:
+        await ctx.send("you are not connected to a voice channel")
+        return
+    else:
+        channel = ctx.message.author.voice.channel
+    voice_client = await channel.connect(
+        discord.FFmpegPCMAudio(path), after=lambda x: endSong(guild, path)
+    )
+    voice_client.source = discord.PCMVolumeTransformer(voice_client.source, 1)
+    await ctx.send(f"**Music: **{url}")
 
+
+@bot.command()
+async def join(ctx):
+    server = ctx.message.server
+    voice_client = bot.voice_client_int(server)
+    await voice_client.disconnect()
+
+
+@bot.command()
+async def leave(ctx):
+    channel = ctx.author.voice.channel
+    await channel.disconnect()
 
 
 @bot.command(aliases=["sunland", "bg", "alexandre"])

@@ -5,7 +5,7 @@ import youtube_dl
 from datetime import datetime
 import os
 
-TOKEN = "OTIyOTY3ODczODg5MTIwMjY4.YcJK0Q.wdZsnVC7JRW0U4apBnbG41uZIvo"
+TOKEN = os.environ["TOKEN"]
 client = discord.Client()
 bot = commands.Bot(command_prefix="!")
 ydl_opts = {

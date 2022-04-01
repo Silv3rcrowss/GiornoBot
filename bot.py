@@ -40,15 +40,13 @@ async def play(ctx, url):
 
 @bot.command()
 async def join(ctx):
-    server = ctx.message.server
-    voice_client = bot.voice_client_int(server)
-    await voice_client.disconnect()
+    channel = ctx.author.voice.channel
+    await channel.connect()
 
 
 @bot.command()
 async def leave(ctx):
-    channel = ctx.author.voice.channel
-    await channel.disconnect()
+    await ctx.voice_client.disconnect()
 
 
 @bot.command(aliases=["sunland", "bg", "alexandre"])

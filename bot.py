@@ -1,23 +1,13 @@
 import discord
 import random
 from discord.ext import commands
-import youtube_dl
 from datetime import datetime
 import os
+from youtube_api import YTDLSource
 
 TOKEN = os.environ["TOKEN"]
 client = discord.Client()
 bot = commands.Bot(command_prefix="!")
-ydl_opts = {
-    "format": "bestaudio/best",
-    "postprocessors": [
-        {
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }
-    ],
-}
 
 
 def endSong(guild, path):
@@ -25,21 +15,54 @@ def endSong(guild, path):
 
 
 @bot.command()
-async def play(ctx, url):
-    if not ctx.message.author.voice:
-        await ctx.send("you are not connected to a voice channel")
-        return
+async def play(ctx, url: str):
+    try:
+        server = ctx.message.guild
+        voice_channel = server.voice_client
+        async with ctx.typing():
+            filename = await YTDLSource.from_url(url, loop=bot.loop)
+            voice_channel.play(
+                discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=filename)
+            )
+        await ctx.send(f"**Now playing:** {filename}")
+    except:
+        await ctx.send("The bot is not connected to a voice channel.")
+
+
+@bot.command()
+async def pause(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_playing():
+        await voice_client.pause()
     else:
-        channel = ctx.message.author.voice.channel
-    voice_client = await channel.connect(
-        discord.FFmpegPCMAudio(path), after=lambda x: endSong(guild, path)
-    )
-    voice_client.source = discord.PCMVolumeTransformer(voice_client.source, 1)
-    await ctx.send(f"**Music: **{url}")
+        await ctx.send("The bot is not playing anything at the moment.")
+
+
+@bot.command(name="resume", help="Resumes the song")
+async def resume(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_paused():
+        await voice_client.resume()
+    else:
+        await ctx.send(
+            "The bot was not playing anything before this. Use play_song command"
+        )
+
+
+@bot.command(name="stop", help="Stops the song")
+async def stop(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_playing():
+        await voice_client.stop()
+    else:
+        await ctx.send("The bot is not playing anything at the moment.")
 
 
 @bot.command()
 async def join(ctx):
+    if not ctx.message.author.voice:
+        await ctx.send(f"{ctx.message.author.name} is not connected to a voice channel")
+        return
     channel = ctx.author.voice.channel
     await channel.connect()
 
@@ -56,7 +79,7 @@ async def sunny(ctx):
     async for message in channel.history(limit=500):
         user_message = str(message.content)
         if user_message.startswith('"'):
-            quote = user_message.split('"')[1]
+            quote = user_message.split('"')[1].strip()
             author = "Sunland"
             quote_date = message.created_at.strftime("%d/%m/%Y")
             if not user_message.endswith('"'):
@@ -79,7 +102,7 @@ async def vanathal(ctx):
     async for message in channel.history(limit=500):
         user_message = str(message.content)
         if user_message.startswith('"'):
-            quote = user_message.split('"')[1]
+            quote = user_message.split('"')[1].strip()
             author = "Vathana"
             quote_date = message.created_at.strftime("%d/%m/%Y")
             if not user_message.endswith('"'):

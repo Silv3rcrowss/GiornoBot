@@ -27,19 +27,6 @@ def get_secret(secret_name, region_name):
     return json.loads(response["SecretString"])
 
 
-# Discord bot setup
-intents = discord.Intents.all()
-intents.members = True
-intents.messages = True
-bot = commands.Bot(command_prefix="?", intents=intents)
-
-# Google Drive API setup
-SERVICE_ACCOUNT_JSON = get_secret("GOOGLE_SERVICE_ACCOUNT_JSON", "eu-west-1")
-SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
-creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_JSON, scopes=SCOPES)
-drive_service = build("drive", "v3", credentials=creds)
-
-
 # Function to search for the image in the specified Google Drive folder
 async def search_image(image_name, folder_id):
     try:
@@ -126,6 +113,16 @@ def start_bot():
         print("Error: Unable to retrieve Discord bot token from Secrets Manager.")
 
 
-# Main entry point
 if __name__ == "__main__":
+    # Discord bot setup
+    intents = discord.Intents.all()
+    intents.members = True
+    intents.messages = True
+    bot = commands.Bot(command_prefix="?", intents=intents)
+
+    # Google Drive API setup
+    SERVICE_ACCOUNT_JSON = get_secret("GOOGLE_SERVICE_ACCOUNT_JSON", "eu-west-1")
+    SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+    creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_JSON, scopes=SCOPES)
+    drive_service = build("drive", "v3", credentials=creds)
     start_bot()

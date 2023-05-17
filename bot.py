@@ -1,153 +1,131 @@
+import json
+from aiohttp import ClientError
 import discord
+import boto3
+import io
 import random
+import requests
 from discord.ext import commands
-from datetime import datetime
-import os
-from youtube_api import YTDLSource
-
-TOKEN = os.environ["TOKEN"]
-client = discord.Client()
-bot = commands.Bot(command_prefix="!")
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 
-def endSong(guild, path):
-    os.remove(path)
+def get_secret(secret_name, region_name):
+    session = boto3.session.Session()
+    client = session.client(
+        service_name="secretsmanager",
+        region_name=region_name,
+    )
 
-
-@bot.command()
-async def play(ctx, url: str):
     try:
-        server = ctx.message.guild
-        voice_channel = server.voice_client
-        async with ctx.typing():
-            filename = await YTDLSource.from_url(url, loop=bot.loop)
-            voice_channel.play(
-                discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=filename)
-            )
-        await ctx.send(f"**Now playing:** {filename}")
-    except:
-        await ctx.send("The bot is not connected to a voice channel.")
+        response = client.get_secret_value(SecretId=secret_name)
+    except ClientError as error:
+        print(f"Error retrieving secret: {error}")
+        return None
+
+    return json.loads(response["SecretString"])
 
 
-@bot.command()
-async def pause(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_playing():
-        await voice_client.pause()
-    else:
-        await ctx.send("The bot is not playing anything at the moment.")
+# Discord bot setup
+intents = discord.Intents.all()
+intents.members = True
+intents.messages = True
+bot = commands.Bot(command_prefix="?", intents=intents)
+
+# Google Drive API setup
+SERVICE_ACCOUNT_JSON = get_secret("GOOGLE_SERVICE_ACCOUNT_JSON", "eu-west-1")
+SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_JSON, scopes=SCOPES)
+drive_service = build("drive", "v3", credentials=creds)
 
 
-@bot.command(name="resume", help="Resumes the song")
-async def resume(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_paused():
-        await voice_client.resume()
-    else:
-        await ctx.send(
-            "The bot was not playing anything before this. Use play_song command"
+# Function to search for the image in the specified Google Drive folder
+async def search_image(image_name, folder_id):
+    try:
+        image_extensions = ["jpg", "jpeg", "png", "gif", "bmp", "webp"]
+        query = " or ".join(
+            [
+                f"(name = '{image_name}.{ext}' and mimeType = 'image/{ext if ext != 'jpg' else 'jpeg'}')"
+                for ext in image_extensions
+            ]
         )
+        query = f"({query}) and trashed = false and '{folder_id}' in parents"
+        response = (
+            drive_service.files().list(q=query, fields="nextPageToken, files(id, name, webContentLink)").execute()
+        )
+        items = response.get("files", [])
+
+        if not items:
+            return None
+
+        return items[0]
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        return None
 
 
-@bot.command(name="stop", help="Stops the song")
-async def stop(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_playing():
-        await voice_client.stop()
+# Discord bot command
+@bot.command(name="img", help="Searches for specified image in Google Drive and sends it to the channel")
+async def img(ctx, image_name: str):
+    image = await search_image(image_name, "1MLcpJMt5JjpfSrcbcPM6vi_LRVKAiTmV")
+
+    if image:
+        # Download the image
+        response = requests.get(image["webContentLink"])
+        image_data = io.BytesIO(response.content)
+
+        # Send the image as an attachment
+        file = discord.File(image_data, filename=f"{image_name}.jpg")
+        await ctx.send(file=file)
     else:
-        await ctx.send("The bot is not playing anything at the moment.")
+        await ctx.send("Sorry, I couldn't find that image.")
 
 
-@bot.command()
-async def join(ctx):
-    if not ctx.message.author.voice:
-        await ctx.send(f"{ctx.message.author.name} is not connected to a voice channel")
-        return
-    channel = ctx.author.voice.channel
-    await channel.connect()
+@bot.command(name="chocolatine", help="Randomly chooses a member to bring breakfast")
+async def chocolatine(ctx):
+    # Get all members with the 'Breakfast' role
+    breakfast_role = discord.utils.get(ctx.guild.roles, name="Breakfast")
+    breakfast_members = [member for member in ctx.guild.members if breakfast_role in member.roles]
+
+    # Randomly choose a member and send a message with their mention
+    if breakfast_members:
+        chosen_member = random.choice(breakfast_members)
+        await ctx.send(
+            f"This week, {chosen_member.mention} will bring us a nice breakfast!\n_PLEASE screenshot this message_"
+        )
+    else:
+        await ctx.send("No members with the 'Breakfast' role were found.")
 
 
-@bot.command()
-async def leave(ctx):
-    await ctx.voice_client.disconnect()
+@bot.command(name="oliviades", help="Posts a random oliviade message from the specific channel")
+async def oliviades(ctx):
+    channel = bot.get_channel(1079689597237346414)
+    await post_random_citation(ctx, channel)
 
 
-@bot.command(aliases=["sunland", "bg", "alexandre"])
-async def sunny(ctx):
-    sunny_chat = []
-    channel = bot.get_channel(794361017479856148)
-    async for message in channel.history(limit=500):
-        user_message = str(message.content)
-        if user_message.startswith('"'):
-            quote = user_message.split('"')[1].strip()
-            author = "Sunland"
-            quote_date = message.created_at.strftime("%d/%m/%Y")
-            if not user_message.endswith('"'):
-                author = user_message.split('"')[-1].replace("-", " ").strip()
-            sunny_chat.append(f'"{quote}"\n-{author} ({quote_date})')
-    await ctx.send(random.choice(sunny_chat))
+# Helper function to post a random citation message
+async def post_random_citation(ctx, channel):
+    citation_messages = []
+    async for message in channel.history(limit=1000):
+        if message.content.startswith('"'):
+            citation_messages.append(message.content)
+    if citation_messages:
+        await ctx.send(random.choice(citation_messages))
+    else:
+        await ctx.send("Sorry, I couldn't find any citation messages.")
 
 
-@bot.event
-async def on_ready():
-    print("Logged in as {0.user}".format(bot))
+def start_bot():
+    secret_name = "discord_bot_token"
+    region_name = "eu-west-1"
+    discord_bot_token = get_secret(secret_name, region_name)
+    if discord_bot_token:
+        bot.run(discord_bot_token["token"])
+    else:
+        print("Error: Unable to retrieve Discord bot token from Secrets Manager.")
 
 
-@bot.command(
-    aliases=["vathana", "vathanal", "vijay", "yasuo-main", "lol", "vathanalakshan"]
-)
-async def vanathal(ctx):
-    vatha_chat = []
-    channel = bot.get_channel(748241419382292491)
-    async for message in channel.history(limit=500):
-        user_message = str(message.content)
-        if user_message.startswith('"'):
-            quote = user_message.split('"')[1].strip()
-            author = "Vathana"
-            quote_date = message.created_at.strftime("%d/%m/%Y")
-            if not user_message.endswith('"'):
-                author = user_message.split('"')[-1].replace("-", " ").strip()
-            vatha_chat.append(f'"{quote}"\n-{author} ({quote_date})')
-    await ctx.send(random.choice(vatha_chat))
-
-
-@bot.command()
-async def dio(ctx):
-    await ctx.send(" hō hō ?…mukatte kuru noka ?")
-    await ctx.send(" nige zuni kono dio ni chikazuite kuru noka ?")
-
-
-async def gen(ctx, message):
-    username = str(message.author).split("#")[0]
-    user_message = str(message.content)
-    channel = str(message.channel.name)
-    print(f"{username}: {user_message} ({channel})")
-    if message.author == client.user:
-        return
-
-    if user_message.lower() == "wisdom":
-        list_of_masterclases = client.get_channel(923005189550661653)
-        async for masterclass in list_of_masterclases.history(limit=600):
-            user_message = str(masterclass.content)
-            if user_message.startswith('"'):
-                quote = user_message
-                author = "Vathana"
-                quote_date = masterclass.created_at.strftime("%d/%m/%Y")
-                if "-" in user_message:
-                    quote = user_message.split("-")[0]
-                    if "0" not in user_message.split("-")[1].split(" ")[0]:
-                        author = user_message.split("-")[1].split(" ")[0]
-            print(f"{quote}\n-{author} {quote_date}")
-            await message.channel.send(f"{quote}\n-{author} {quote_date}")
-        return
-
-    elif user_message.lower() == "dio!":
-        await message.channel.send(" hō hō ?…mukatte kuru noka ?")
-        await message.channel.send(" nige zuni kono dio ni chikazuite kuru noka ?")
-        return
-
-
-bot.run(TOKEN)
-
-
-# Add pictures treatment
+# Main entry point
+if __name__ == "__main__":
+    start_bot()

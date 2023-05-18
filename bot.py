@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 from aiohttp import ClientError
 import discord
 import boto3
@@ -11,7 +12,13 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 
-def get_secret(secret_name, region_name):
+def get_secret(secret_name, region_name) -> Optional[dict]:
+    """
+    Retrieves a secret from AWS Secrets Manager
+    :param secret_name: The name of the secret
+    :param region_name: The AWS region where the secret is stored
+    :return: The secret as a dictionary
+    """
     session = boto3.session.Session()
     client = session.client(
         service_name="secretsmanager",
@@ -25,6 +32,19 @@ def get_secret(secret_name, region_name):
         return None
 
     return json.loads(response["SecretString"])
+
+
+ # Discord bot setup
+intents = discord.Intents.all()
+intents.members = True
+intents.messages = True
+bot = commands.Bot(command_prefix="?", intents=intents)
+
+# Google Drive API setup
+SERVICE_ACCOUNT_JSON = get_secret("GOOGLE_SERVICE_ACCOUNT_JSON", "eu-west-1")
+SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_JSON, scopes=SCOPES)
+drive_service = build("drive", "v3", credentials=creds)
 
 
 # Function to search for the image in the specified Google Drive folder
@@ -55,7 +75,7 @@ async def search_image(image_name, folder_id):
 # Discord bot command
 @bot.command(name="img", help="Searches for specified image in Google Drive and sends it to the channel")
 async def img(ctx, image_name: str):
-    image = await search_image(image_name, "1MLcpJMt5JjpfSrcbcPM6vi_LRVKAiTmV")
+    image = await search_image(image_name, DRIVE_FOLDER_ID)
 
     if image:
         # Download the image
@@ -87,7 +107,7 @@ async def chocolatine(ctx):
 
 @bot.command(name="oliviades", help="Posts a random oliviade message from the specific channel")
 async def oliviades(ctx):
-    channel = bot.get_channel(1079689597237346414)
+    channel = bot.get_channel(OLIVIADES_CHANNEL_ID)
     await post_random_citation(ctx, channel)
 
 
@@ -103,26 +123,18 @@ async def post_random_citation(ctx, channel):
         await ctx.send("Sorry, I couldn't find any citation messages.")
 
 
-def start_bot():
-    secret_name = "discord_bot_token"
-    region_name = "eu-west-1"
-    discord_bot_token = get_secret(secret_name, region_name)
+def start_bot(discord_bot_token: str):
     if discord_bot_token:
-        bot.run(discord_bot_token["token"])
+        bot.run(discord_bot_token)
     else:
         print("Error: Unable to retrieve Discord bot token from Secrets Manager.")
 
 
 if __name__ == "__main__":
-    # Discord bot setup
-    intents = discord.Intents.all()
-    intents.members = True
-    intents.messages = True
-    bot = commands.Bot(command_prefix="?", intents=intents)
-
-    # Google Drive API setup
-    SERVICE_ACCOUNT_JSON = get_secret("GOOGLE_SERVICE_ACCOUNT_JSON", "eu-west-1")
-    SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
-    creds = service_account.Credentials.from_service_account_info(SERVICE_ACCOUNT_JSON, scopes=SCOPES)
-    drive_service = build("drive", "v3", credentials=creds)
-    start_bot()
+    bot_secrets = get_secret("giorno_bot_secrets", "eu-west-1")
+    if bot_secrets:
+        DRIVE_FOLDER_ID = bot_secrets["drive_folder"]
+        OLIVIADES_CHANNEL_ID = int(bot_secrets["oliviades_channel"])
+        start_bot(bot_secrets["token"])
+    else:
+        print("Error: Unable to retrieve the bot's secrets from Secrets Manager.")

@@ -60,16 +60,22 @@ resource "aws_instance" "app" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
 
-  subnet_id                   = aws_subnet.main.id
-  vpc_security_group_ids      = [aws_security_group.discord_bot_sg.id]
-  iam_instance_profile        = aws_iam_instance_profile.bot_profile.name
-  user_data = templatefile("user_data.tpl", { bot_script = local.bot_script })
+  subnet_id              = aws_subnet.main.id
+  vpc_security_group_ids = [aws_security_group.discord_bot_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.bot_profile.name
+  user_data              = templatefile("user_data.tpl", { bot_script = local.bot_script })
 
   tags = {
     Name = "discord-bot"
   }
 }
 
+
+resource "aws_route" "internet_access" {
+  route_table_id         = aws_route_table.main.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.main.id
+}
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
@@ -147,10 +153,10 @@ resource "aws_iam_role_policy_attachment" "secrets_manager_attachment" {
 }
 
 resource "aws_iam_instance_profile" "bot_profile" {
-    name = "discord_bot_profile"
-    role = aws_iam_role.bot_role.name
+  name = "discord_bot_profile"
+  role = aws_iam_role.bot_role.name
 }
 
 output "public_ip" {
-    value = aws_eip.app_eip.public_ip
+  value = aws_eip.app_eip.public_ip
 }

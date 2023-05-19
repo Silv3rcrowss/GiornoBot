@@ -43,29 +43,29 @@ This Discord bot offers a variety of features that help users perform specific t
 
 ### Available Commands
 
-#### 1. !img
+#### 1. ?img
 
-- **Usage**: `!img <image_name>`
+- **Usage**: `?img <image_name>`
 
 This command searches for a specified image in a Google Drive folder and sends it to the channel. Replace `<image_name>` with the name of the image you want to search for. The bot supports the following image formats: JPG, JPEG, PNG, GIF, BMP, and WEBP.
 
-- **Example**: `!img Tdrycs`
+- **Example**: `?img Tdrycs`
 
-#### 2. !chocolatine
+#### 2. ?chocolatine
 
-- **Usage**: `!chocolatine`
+- **Usage**: `?chocolatine`
 
 This command randomly selects a member with the 'Breakfast' role and posts a message mentioning that they will bring breakfast. No arguments are required for this command.
 
-- **Example**: `!chocolatine`
+- **Example**: `?chocolatine`
 
-#### 3. !oliviades
+#### 3. ?oliviades
 
-- **Usage**: `!oliviades`
+- **Usage**: `?oliviades`
 
 This command posts a random citation message from a specific channel. No arguments are required for this command. The channel from which the bot will fetch citation messages should be pre-configured in the code.
 
-- **Example**: `!oliviades`
+- **Example**: `?oliviades`
 
 ### Using the Commands
 

@@ -76,6 +76,7 @@ resource "aws_route" "internet_access" {
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.main.id
 }
+
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
@@ -101,14 +102,14 @@ resource "aws_eip" "app_eip" {
   }
 }
 
-resource "aws_eip" "nat_gateway_eip" {
-  vpc = true
-}
+# resource "aws_eip" "nat_gateway_eip" {
+#   vpc = true
+# }
 
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat_gateway_eip.id
-  subnet_id     = aws_subnet.main.id
-}
+# resource "aws_nat_gateway" "main" {
+#   allocation_id = aws_eip.nat_gateway_eip.id
+#   subnet_id     = aws_subnet.main.id
+# }
 
 
 

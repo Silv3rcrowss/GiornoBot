@@ -59,6 +59,7 @@ locals {
 resource "aws_instance" "app" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
+  key_name      = "my-super-key-pair"
 
   subnet_id              = aws_subnet.main.id
   vpc_security_group_ids = [aws_security_group.discord_bot_sg.id]
@@ -102,6 +103,7 @@ resource "aws_eip" "app_eip" {
   }
 }
 
+# This is too expensive for a simple bot
 # resource "aws_eip" "nat_gateway_eip" {
 #   vpc = true
 # }

@@ -12,7 +12,7 @@ from personal_assitant import Conversation
 
 
 class GiornoBot(commands.Bot):
-    conversation: Conversation
+    conversation: dict[str, Conversation]
     drive_service: Any
     oliviade_channel_id: str
     drive_id_folder: str
@@ -23,11 +23,11 @@ class GiornoBot(commands.Bot):
         intents.members = True
         intents.messages = True
         super().__init__(command_prefix=command_prefix, intents=intents)
-        self.initialize_bot_secrets()
-        self.initialize_google_service_account()
-        self.conversation = Conversation()
+        self._initialize_bot_secrets()
+        self._initialize_google_service_account()
+        self.conversation = {}
         self.add_commands()
-        # self.run(self.bot_token)
+        self.run(token=self.bot_token)
 
     async def search_image(self, image_name, folder_id):
         """
@@ -73,7 +73,24 @@ class GiornoBot(commands.Bot):
             prompt = f'{author.name}: {" ".join(args)}'
             print(f"Author: {author.name}")
             print(f"Received prompt: {prompt}")
-            response = self.conversation.run_and_retrieve_message(prompt=prompt)
+            prompt_history = ""
+            skip_prompt = True
+            async for message in ctx.channel.history(limit=10):
+                if skip_prompt:
+                    skip_prompt = False
+                    continue
+                if message.author == self.user:
+                    break
+                prompt_history = (
+                    f"{message.author}: {message.content}\n{prompt_history}"
+                )
+            prompt = f"*Message history*\n{prompt_history}\n*Prompt*\n{prompt}"
+            print(prompt)
+            if ctx.channel.id not in self.conversation.keys():
+                self.conversation[ctx.channel.id] = Conversation()
+            response = self.conversation[ctx.channel.id].run_and_retrieve_message(
+                prompt=prompt
+            )
             await ctx.send(response)
 
         @self.command(name="reset", help="Resets the conversation")
@@ -137,7 +154,7 @@ class GiornoBot(commands.Bot):
             else:
                 await ctx.send("Sorry, I couldn't find any citation messages.")
 
-    def initialize_bot_secrets(self):
+    def _initialize_bot_secrets(self):
         bot_secrets = get_secret(
             secret_name="giorno_bot_secrets", region_name="eu-west-1"
         )
@@ -150,7 +167,7 @@ class GiornoBot(commands.Bot):
                 "Error: Unable to retrieve the bot's secrets from Secrets Manager."
             )
 
-    def initialize_google_service_account(self):
+    def _initialize_google_service_account(self):
         service_account_json = get_secret(
             secret_name="GOOGLE_SERVICE_ACCOUNT_JSON", region_name="eu-west-1"
         )
@@ -163,4 +180,3 @@ class GiornoBot(commands.Bot):
 
 if __name__ == "__main__":
     bot = GiornoBot(command_prefix="?")
-    bot.run(bot.bot_token)
